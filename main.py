@@ -198,19 +198,23 @@ class MainWindow(QMainWindow):
             if not isinstance(node, OperationNode):
                 continue
 
-            # Тривалість: пріоритет має поле годин, якщо заповнене
+            # Тривалість: пріоритет має поле днів, потім годин
             dur = 0
             try:
-                dh = float(node.get_property('duration_hours'))
-                if dh > 0:
-                    dur = round(dh * 60)
+                dd = float(node.get_property('duration_days'))
+                if dd > 0:
+                    dur = round(dd * 24 * 60)
             except (ValueError, TypeError):
                 pass
             if dur <= 0:
                 try:
-                    dur = int(node.get_property('duration'))
+                    dh = float(node.get_property('duration_hours'))
+                    if dh > 0:
+                        dur = round(dh * 60)
                 except (ValueError, TypeError):
-                    dur = 1
+                    pass
+            if dur <= 0:
+                dur = 60
 
             try:
                 wn = int(node.get_property('workers_needed'))
@@ -274,21 +278,24 @@ class MainWindow(QMainWindow):
             return
 
         # Виводимо результат текстово
-        ms = result['makespan']
-        ms_h = result.get('makespan_hours', round(ms / 60, 2))
-        self._log_msg(f'\nРозклад побудовано! Загальний час: {ms} хв ({ms_h} год)\n')
+        ms_h = result.get('makespan_hours', round(result['makespan'] / 60, 2))
+        ms_d = result.get('makespan_days', round(result['makespan'] / 1440, 2))
+        self._log_msg(f'\nРозклад побудовано! Загальний час: {ms_h} год ({ms_d} дн)\n')
 
-        header = (f'{"Операція":<25} {"Початок":>8} {"Кінець":>8} '
-                  f'{"Трив.(хв)":>10} {"Трив.(год)":>11}   Працівники')
+        header = (f'{"Операція":<25} {"Поч.(год)":>10} {"Кін.(год)":>10} '
+                  f'{"Трив.(год)":>11} {"Трив.(дн)":>10}   Працівники')
         self._log_msg(header)
         self._log_msg('-' * len(header))
 
         for a in result['assignments']:
             workers_str = ', '.join(a['workers']) if a['workers'] else '—'
             dh = a.get('duration_hours', round(a['duration'] / 60, 2))
+            dd = a.get('duration_days', round(a['duration'] / 1440, 2))
+            start_h = round(a['start'] / 60, 2)
+            end_h = round(a['end'] / 60, 2)
             self._log_msg(
-                f'{a["operation_name"]:<25} {a["start"]:>8} {a["end"]:>8} '
-                f'{a["duration"]:>10} {dh:>11}   {workers_str}'
+                f'{a["operation_name"]:<25} {start_h:>10} {end_h:>10} '
+                f'{dh:>11} {dd:>10}   {workers_str}'
             )
 
         self._log_msg('=' * 50)
