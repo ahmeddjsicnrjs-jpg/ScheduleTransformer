@@ -2,11 +2,11 @@ import json
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
-    QMessageBox, QLabel, QWidget, QScrollArea,
-    QLineEdit, QCompleter, QListWidget, QListWidgetItem,
-    QColorDialog, QSizePolicy,
+    QMessageBox, QLabel, QWidget,
+    QLineEdit, QListWidget, QListWidgetItem,
+    QColorDialog,
 )
-from PyQt5.QtCore import Qt, QStringListModel, QSortFilterProxyModel
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
 
@@ -20,8 +20,8 @@ _DEFAULT_COLORS = [
 
 class OperationListWidget(QWidget):
     """
-    Widget with a searchable dropdown to add operations
-    and a list showing currently assigned operations.
+    Widget with two lists: available operations (with search filter)
+    and selected operations. Click to add/remove.
     """
 
     def __init__(self, available_operations, selected_operations=None, parent=None):
@@ -33,82 +33,93 @@ class OperationListWidget(QWidget):
         layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(2)
 
-        # --- Search + Add row ---
-        add_row = QHBoxLayout()
-        add_row.setSpacing(2)
-
+        # --- Search field ---
         self._search = QLineEdit()
         self._search.setPlaceholderText('Пошук операції...')
-        completer = QCompleter(self._available)
-        completer.setCaseSensitivity(Qt.CaseInsensitive)
-        completer.setFilterMode(Qt.MatchContains)
-        self._search.setCompleter(completer)
-        add_row.addWidget(self._search)
+        self._search.textChanged.connect(self._filter_available)
+        layout.addWidget(self._search)
 
-        btn_add = QPushButton('+')
-        btn_add.setFixedWidth(30)
-        btn_add.setToolTip('Додати операцію')
-        btn_add.clicked.connect(self._add_operation)
-        add_row.addWidget(btn_add)
+        # --- Available operations list ---
+        lbl_avail = QLabel('Доступні:')
+        lbl_avail.setStyleSheet('font-size: 10px; color: #666; margin-top: 2px;')
+        layout.addWidget(lbl_avail)
 
-        layout.addLayout(add_row)
+        self._available_list = QListWidget()
+        self._available_list.setStyleSheet(
+            'QListWidget { font-size: 11px; }'
+            'QListWidget::item { padding: 2px 4px; }'
+            'QListWidget::item:hover { background: #e8f5e9; }'
+        )
+        self._available_list.itemDoubleClicked.connect(self._on_available_clicked)
+        layout.addWidget(self._available_list, 1)
 
-        # --- List of selected operations ---
-        self._list_widget = QListWidget()
-        self._list_widget.setStyleSheet('QListWidget { font-size: 11px; }')
-        layout.addWidget(self._list_widget)
+        # --- Selected operations list ---
+        lbl_sel = QLabel('Обрані:')
+        lbl_sel.setStyleSheet('font-size: 10px; color: #666; margin-top: 2px;')
+        layout.addWidget(lbl_sel)
 
-        self._search.returnPressed.connect(self._add_operation)
-        self._rebuild_list()
+        self._selected_list = QListWidget()
+        self._selected_list.setStyleSheet(
+            'QListWidget { font-size: 11px; }'
+            'QListWidget::item { padding: 2px 4px; }'
+            'QListWidget::item:hover { background: #ffebee; }'
+        )
+        self._selected_list.itemDoubleClicked.connect(self._on_selected_clicked)
+        layout.addWidget(self._selected_list, 1)
 
-    def _add_operation(self):
-        text = self._search.text().strip()
-        if not text:
-            return
-        if text not in self._available:
-            # Try case-insensitive match
-            for op in self._available:
-                if op.lower() == text.lower():
-                    text = op
-                    break
+        self._rebuild_lists()
+
+    def _filter_available(self, text):
+        """Filter available operations list by search text."""
+        text = text.strip().lower()
+        for i in range(self._available_list.count()):
+            item = self._available_list.item(i)
+            if text:
+                item.setHidden(text not in item.text().lower())
             else:
-                return
-        if text not in self._selected:
-            self._selected.append(text)
-            self._rebuild_list()
-        self._search.clear()
+                item.setHidden(False)
 
-    def _remove_operation(self, op_name):
-        if op_name in self._selected:
-            self._selected.remove(op_name)
-            self._rebuild_list()
+    def _on_available_clicked(self, item):
+        op = item.text().lstrip('+ ')
+        if op in self._available and op not in self._selected:
+            self._selected.append(op)
+            self._rebuild_lists()
 
-    def _rebuild_list(self):
-        self._list_widget.clear()
+    def _on_selected_clicked(self, item):
+        op = item.text().lstrip('\u00d7 ')
+        if op in self._selected:
+            self._selected.remove(op)
+            self._rebuild_lists()
+
+    def _rebuild_lists(self):
+        # Available (not yet selected)
+        self._available_list.clear()
+        not_selected = [op for op in self._available if op not in self._selected]
+        for op in not_selected:
+            item = QListWidgetItem(f'+ {op}')
+            item.setForeground(QColor(56, 142, 60))
+            self._available_list.addItem(item)
+
+        if not not_selected and not self._available:
+            item = QListWidgetItem('(немає операцій у графі)')
+            item.setForeground(QColor(160, 160, 160))
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+            self._available_list.addItem(item)
+        elif not not_selected:
+            item = QListWidgetItem('(всі операції обрані)')
+            item.setForeground(QColor(160, 160, 160))
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+            self._available_list.addItem(item)
+
+        # Selected
+        self._selected_list.clear()
         for op in self._selected:
-            item_widget = QWidget()
-            item_layout = QHBoxLayout(item_widget)
-            item_layout.setContentsMargins(2, 1, 2, 1)
-            item_layout.setSpacing(4)
+            item = QListWidgetItem(f'\u00d7 {op}')
+            item.setForeground(QColor(198, 40, 40))
+            self._selected_list.addItem(item)
 
-            lbl = QLabel(op)
-            lbl.setStyleSheet('font-size: 11px;')
-            item_layout.addWidget(lbl, 1)
-
-            btn_del = QPushButton('\u00d7')
-            btn_del.setFixedSize(20, 20)
-            btn_del.setStyleSheet(
-                'QPushButton { color: red; font-weight: bold; border: none; font-size: 13px; }'
-                'QPushButton:hover { background: #ffcccc; border-radius: 3px; }'
-            )
-            btn_del.setToolTip(f'Видалити {op}')
-            btn_del.clicked.connect(lambda checked, name=op: self._remove_operation(name))
-            item_layout.addWidget(btn_del)
-
-            list_item = QListWidgetItem()
-            list_item.setSizeHint(item_widget.sizeHint())
-            self._list_widget.addItem(list_item)
-            self._list_widget.setItemWidget(list_item, item_widget)
+        # Re-apply search filter
+        self._filter_available(self._search.text())
 
     def get_selected_operations(self):
         return list(self._selected)
@@ -301,7 +312,8 @@ class WorkersWindow(QDialog):
             )
             self._table.setCellWidget(row, 2, ops_widget)
 
-            self._table.setRowHeight(row, max(140, 32 * (len(worker_ops) + 2)))
+            total_ops = len(self._available_operations) + len(worker_ops)
+            self._table.setRowHeight(row, max(180, 22 * total_ops + 80))
 
     # ------------------------------------------------------------------
     # File I/O
