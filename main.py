@@ -301,6 +301,14 @@ class MainWindow(QMainWindow):
             )
 
         self._log_msg('=' * 50)
+
+        # Передаємо кольори працівників у діаграму Ганта
+        worker_color_map = {}
+        for w in workers:
+            if 'color' in w:
+                worker_color_map[w['name']] = w['color']
+        self._gantt.set_worker_colors(worker_color_map)
+
         self._gantt.set_schedule(result)
         self._last_schedule = result
 
