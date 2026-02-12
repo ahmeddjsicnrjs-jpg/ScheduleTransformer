@@ -101,7 +101,7 @@ def build_schedule(operations, dependencies, workers):
             'end': solver.value(ends[oid]),
             'duration': dur_min,
             'duration_hours': round(dur_min / 60, 2),
-            'duration_days': round(dur_min / 1440, 2),
+            'duration_days': round(dur_min / 480, 2),
             'workers': assigned_workers,
         })
 
@@ -111,7 +111,7 @@ def build_schedule(operations, dependencies, workers):
     return {
         'makespan': ms,
         'makespan_hours': round(ms / 60, 2),
-        'makespan_days': round(ms / 1440, 2),
+        'makespan_days': round(ms / 480, 2),
         'assignments': assignments,
     }
 

@@ -93,15 +93,23 @@ class GanttCanvas(QWidget):
 
         y0 = self.TOP_MARGIN + self.HEADER_HEIGHT
 
-        # --- Часова шкала ---
+        # --- Часова шкала (робоча зміна 8:00–17:00) ---
         painter.setPen(QPen(QColor(100, 100, 100)))
-        painter.setFont(QFont('Arial', 9))
+        painter.setFont(QFont('Arial', 8))
 
         step = max(1, makespan // 20)
+        # Вирівнюємо крок до 60 хвилин для читабельності
+        if step > 30:
+            step = max(60, (step // 60) * 60)
         for t in range(0, makespan + 1, step):
             x = self.LEFT_MARGIN + t * px_per_unit
             painter.drawLine(int(x), y0 - 5, int(x), y0 + len(worker_order) * self.ROW_HEIGHT)
-            painter.drawText(int(x) - 10, y0 - 8, str(t))
+            day = t // 480
+            rem = t % 480
+            hour = 8 + rem // 60
+            minute = rem % 60
+            label = f'Д{day + 1} {hour}:{minute:02d}'
+            painter.drawText(int(x) - 20, y0 - 8, label)
 
         # --- Рядки працівників ---
         painter.setFont(QFont('Arial', 10))
@@ -170,6 +178,8 @@ class GanttWidget(QWidget):
     def set_schedule(self, schedule: dict):
         ms = schedule.get('makespan', 0)
         ms_h = schedule.get('makespan_hours', round(ms / 60, 2))
-        ms_d = schedule.get('makespan_days', round(ms / 1440, 2))
-        self._label.setText(f'Діаграма Ганта  —  Загальний час: {ms_h} год ({ms_d} дн)')
+        ms_d = schedule.get('makespan_days', round(ms / 480, 2))
+        self._label.setText(
+            f'Діаграма Ганта  —  Загальний час: {ms_h} год ({ms_d} дн)  |  '
+            f'Зміна: 8:00–17:00')
         self._canvas.set_schedule(schedule)
