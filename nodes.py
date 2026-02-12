@@ -18,8 +18,10 @@ class OperationNode(BaseNode):
 
         self.add_text_input('op_name', label='Назва', text='Нова операція',
                             tooltip='Назва операції')
-        self.add_text_input('duration', label='Тривалість (хв)', text='1',
-                            tooltip='Тривалість операції у хвилинах')
+        self.add_text_input('duration_hours', label='Тривалість (год)', text='',
+                            tooltip='Тривалість операції у годинах')
+        self.add_text_input('duration_days', label='Тривалість (дн)', text='',
+                            tooltip='Тривалість операції у днях (1 день = 8 робочих годин)')
         self.add_text_input('workers_needed', label='Працівників', text='1',
                             tooltip='Кількість працівників для операції')
 

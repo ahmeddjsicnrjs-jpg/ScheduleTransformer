@@ -197,10 +197,26 @@ class MainWindow(QMainWindow):
         for node in self._graph.all_nodes():
             if not isinstance(node, OperationNode):
                 continue
+
+            # Тривалість: пріоритет має поле днів, потім годин
+            # Робоча зміна: 8 годин (480 хвилин)
+            dur = 0
             try:
-                dur = int(node.get_property('duration'))
+                dd = float(node.get_property('duration_days'))
+                if dd > 0:
+                    dur = round(dd * 8 * 60)
             except (ValueError, TypeError):
-                dur = 1
+                pass
+            if dur <= 0:
+                try:
+                    dh = float(node.get_property('duration_hours'))
+                    if dh > 0:
+                        dur = round(dh * 60)
+                except (ValueError, TypeError):
+                    pass
+            if dur <= 0:
+                dur = 60
+
             try:
                 wn = int(node.get_property('workers_needed'))
             except (ValueError, TypeError):
@@ -263,17 +279,25 @@ class MainWindow(QMainWindow):
             return
 
         # Виводимо результат текстово
-        self._log_msg(f'\nРозклад побудовано! Загальний час: {result["makespan"]} хв\n')
+        ms_h = result.get('makespan_hours', round(result['makespan'] / 60, 2))
+        ms_d = result.get('makespan_days', round(result['makespan'] / 480, 2))
+        self._log_msg(f'\nРозклад побудовано! Загальний час: {ms_h} год ({ms_d} дн)')
+        self._log_msg(f'Робоча зміна: 8:00–17:00 (8 год)\n')
 
-        header = f'{"Операція":<25} {"Початок":>8} {"Кінець":>8} {"Трив.":>6}   Працівники'
+        header = (f'{"Операція":<25} {"Початок":>12} {"Кінець":>12} '
+                  f'{"Трив.(год)":>11} {"Трив.(дн)":>10}   Працівники')
         self._log_msg(header)
         self._log_msg('-' * len(header))
 
         for a in result['assignments']:
             workers_str = ', '.join(a['workers']) if a['workers'] else '—'
+            dh = a.get('duration_hours', round(a['duration'] / 60, 2))
+            dd = a.get('duration_days', round(a['duration'] / 480, 2))
+            start_s = self._format_shift_time(a['start'])
+            end_s = self._format_shift_time(a['end'])
             self._log_msg(
-                f'{a["operation_name"]:<25} {a["start"]:>8} {a["end"]:>8} '
-                f'{a["duration"]:>6}   {workers_str}'
+                f'{a["operation_name"]:<25} {start_s:>12} {end_s:>12} '
+                f'{dh:>11} {dd:>10}   {workers_str}'
             )
 
         self._log_msg('=' * 50)
@@ -343,6 +367,15 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_shift_time(minutes):
+        """Форматує хвилини у робочий час зміни (8:00-17:00, 8 год/день)."""
+        day = int(minutes // 480)
+        remainder = int(minutes % 480)
+        hour = 8 + remainder // 60
+        minute = remainder % 60
+        return f'Д{day + 1} {hour}:{minute:02d}'
 
     def _log_msg(self, msg):
         self._log.append(msg)

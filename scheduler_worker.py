@@ -93,19 +93,25 @@ def build_schedule(operations, dependencies, workers):
             if key in assign_vars and solver.value(assign_vars[key]):
                 assigned_workers.append(w['name'])
 
+        dur_min = int(op['duration'])
         assignments.append({
             'operation_id': oid,
             'operation_name': op['name'],
             'start': solver.value(starts[oid]),
             'end': solver.value(ends[oid]),
-            'duration': int(op['duration']),
+            'duration': dur_min,
+            'duration_hours': round(dur_min / 60, 2),
+            'duration_days': round(dur_min / 480, 2),
             'workers': assigned_workers,
         })
 
     assignments.sort(key=lambda x: (x['start'], x['operation_name']))
 
+    ms = solver.value(makespan)
     return {
-        'makespan': solver.value(makespan),
+        'makespan': ms,
+        'makespan_hours': round(ms / 60, 2),
+        'makespan_days': round(ms / 480, 2),
         'assignments': assignments,
     }
 
