@@ -21,6 +21,7 @@ from NodeGraphQt import NodeGraph, PropertiesBinWidget
 from nodes import OperationNode
 from workers_window import WorkersWindow
 from scheduler import build_schedule
+from gantt_widget import GanttWidget
 
 
 class MainWindow(QMainWindow):
@@ -45,10 +46,17 @@ class MainWindow(QMainWindow):
         props_dock.setWidget(self._properties_bin)
         self.addDockWidget(Qt.RightDockWidgetArea, props_dock)
 
-        # --- Log / results panel (dock, bottom) ---
+        # --- Gantt chart (dock, bottom) ---
+        self._gantt = GanttWidget()
+        gantt_dock = QDockWidget('Розклад')
+        gantt_dock.setWidget(self._gantt)
+        self.addDockWidget(Qt.BottomDockWidgetArea, gantt_dock)
+
+        # --- Log panel (dock, bottom) ---
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        log_dock = QDockWidget('Журнал / Результати')
+        self._log.setMaximumHeight(150)
+        log_dock = QDockWidget('Журнал')
         log_dock.setWidget(self._log)
         self.addDockWidget(Qt.BottomDockWidgetArea, log_dock)
 
@@ -269,6 +277,7 @@ class MainWindow(QMainWindow):
             )
 
         self._log_msg('=' * 50)
+        self._gantt.set_schedule(result)
         self._last_schedule = result
 
     # ------------------------------------------------------------------
