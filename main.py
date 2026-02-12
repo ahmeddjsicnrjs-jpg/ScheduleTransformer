@@ -197,10 +197,21 @@ class MainWindow(QMainWindow):
         for node in self._graph.all_nodes():
             if not isinstance(node, OperationNode):
                 continue
+
+            # Тривалість: пріоритет має поле годин, якщо заповнене
+            dur = 0
             try:
-                dur = int(node.get_property('duration'))
+                dh = float(node.get_property('duration_hours'))
+                if dh > 0:
+                    dur = round(dh * 60)
             except (ValueError, TypeError):
-                dur = 1
+                pass
+            if dur <= 0:
+                try:
+                    dur = int(node.get_property('duration'))
+                except (ValueError, TypeError):
+                    dur = 1
+
             try:
                 wn = int(node.get_property('workers_needed'))
             except (ValueError, TypeError):
@@ -263,17 +274,21 @@ class MainWindow(QMainWindow):
             return
 
         # Виводимо результат текстово
-        self._log_msg(f'\nРозклад побудовано! Загальний час: {result["makespan"]} хв\n')
+        ms = result['makespan']
+        ms_h = result.get('makespan_hours', round(ms / 60, 2))
+        self._log_msg(f'\nРозклад побудовано! Загальний час: {ms} хв ({ms_h} год)\n')
 
-        header = f'{"Операція":<25} {"Початок":>8} {"Кінець":>8} {"Трив.":>6}   Працівники'
+        header = (f'{"Операція":<25} {"Початок":>8} {"Кінець":>8} '
+                  f'{"Трив.(хв)":>10} {"Трив.(год)":>11}   Працівники')
         self._log_msg(header)
         self._log_msg('-' * len(header))
 
         for a in result['assignments']:
             workers_str = ', '.join(a['workers']) if a['workers'] else '—'
+            dh = a.get('duration_hours', round(a['duration'] / 60, 2))
             self._log_msg(
                 f'{a["operation_name"]:<25} {a["start"]:>8} {a["end"]:>8} '
-                f'{a["duration"]:>6}   {workers_str}'
+                f'{a["duration"]:>10} {dh:>11}   {workers_str}'
             )
 
         self._log_msg('=' * 50)

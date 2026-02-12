@@ -169,5 +169,6 @@ class GanttWidget(QWidget):
 
     def set_schedule(self, schedule: dict):
         ms = schedule.get('makespan', 0)
-        self._label.setText(f'Діаграма Ганта  —  Загальний час: {ms} хв')
+        ms_h = schedule.get('makespan_hours', round(ms / 60, 2))
+        self._label.setText(f'Діаграма Ганта  —  Загальний час: {ms} хв ({ms_h} год)')
         self._canvas.set_schedule(schedule)
