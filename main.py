@@ -189,11 +189,19 @@ class MainWindow(QMainWindow):
         for node in self._graph.all_nodes():
             if not isinstance(node, OperationNode):
                 continue
+            try:
+                dur = int(node.get_property('duration'))
+            except (ValueError, TypeError):
+                dur = 1
+            try:
+                wn = int(node.get_property('workers_needed'))
+            except (ValueError, TypeError):
+                wn = 1
             operations.append({
                 'id': node.id,
                 'name': node.get_property('op_name') or 'Без назви',
-                'duration': int(node.get_property('duration') or 1),
-                'workers_needed': int(node.get_property('workers_needed') or 1),
+                'duration': max(dur, 1),
+                'workers_needed': max(wn, 1),
             })
 
         for node in self._graph.all_nodes():

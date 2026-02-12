@@ -18,10 +18,9 @@ class OperationNode(BaseNode):
 
         self.add_text_input('op_name', label='Назва', text='Нова операція',
                             tooltip='Назва операції')
-
-        self.create_property('duration', 1, widget_type=7, range=(1, 9999),
-                             widget_tooltip='Тривалість (хв)')
-        self.create_property('workers_needed', 1, widget_type=7, range=(1, 100),
-                             widget_tooltip='Кількість працівників')
+        self.add_text_input('duration', label='Тривалість (хв)', text='1',
+                            tooltip='Тривалість операції у хвилинах')
+        self.add_text_input('workers_needed', label='Працівників', text='1',
+                            tooltip='Кількість працівників для операції')
 
         self.set_color(40, 60, 100)
