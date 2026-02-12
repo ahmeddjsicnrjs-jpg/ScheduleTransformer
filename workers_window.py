@@ -280,10 +280,8 @@ class WorkersWindow(QDialog):
             # Operations
             ops_widget = self._table.cellWidget(row, 2)
             selected_ops = []
-            if ops_widget:
-                op_list = ops_widget.findChild(OperationListWidget)
-                if op_list:
-                    selected_ops = op_list.get_selected_operations()
+            if isinstance(ops_widget, OperationListWidget):
+                selected_ops = ops_widget.get_selected_operations()
 
             workers.append({'name': name, 'operations': selected_ops, 'color': color})
         self._workers = workers
