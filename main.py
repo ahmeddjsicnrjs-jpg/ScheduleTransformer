@@ -229,13 +229,16 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, 'Помилка побудови розкладу', msg)
 
     def _do_build_schedule(self):
+        print('[main] _do_build_schedule start', flush=True)
         operations, dependencies = self._extract_graph_data()
+        print(f'[main] extracted: ops={len(operations)}, deps={len(dependencies)}', flush=True)
 
         if not operations:
             QMessageBox.warning(self, 'Увага', 'Граф порожній. Додайте операції.')
             return
 
         workers = self._workers_window.get_workers_data()
+        print(f'[main] workers={workers}', flush=True)
         if not workers:
             QMessageBox.warning(self, 'Увага',
                                 'Немає працівників. Відкрийте вікно працівників та додайте їх.')
@@ -246,7 +249,9 @@ class MainWindow(QMainWindow):
                       f'Залежностей: {len(dependencies)}, '
                       f'Працівників: {len(workers)}')
 
+        print('[main] calling build_schedule...', flush=True)
         result = build_schedule(operations, dependencies, workers)
+        print(f'[main] build_schedule returned: {result is not None}', flush=True)
 
         if result is None:
             QMessageBox.critical(self, 'Помилка',
@@ -257,6 +262,7 @@ class MainWindow(QMainWindow):
             self._log_msg('ПОМИЛКА: неможливо побудувати розклад')
             return
 
+        print('[main] setting gantt schedule...', flush=True)
         self._gantt.set_schedule(result)
         self._log_msg(f'Розклад побудовано! Загальний час: {result["makespan"]} хв')
 
@@ -267,6 +273,7 @@ class MainWindow(QMainWindow):
             )
 
         self._last_schedule = result
+        print('[main] _do_build_schedule done', flush=True)
 
     # ------------------------------------------------------------------
     # Save / Load
