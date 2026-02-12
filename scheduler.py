@@ -12,50 +12,29 @@
 from ortools.sat.python import cp_model
 
 
-def build_schedule(operations: list[dict],
-                   dependencies: list[tuple[str, str]],
-                   workers: list[dict]) -> dict | None:
+def build_schedule(operations, dependencies, workers):
     """
     Побудувати розклад.
 
     Parameters
     ----------
-    operations : list[dict]
+    operations : list of dict
         Кожен елемент: {'id': str, 'name': str, 'duration': int, 'workers_needed': int}
-    dependencies : list[tuple[str, str]]
-        Пари (id_попередника, id_наступника). Наступник не може початися
-        поки попередник не завершиться.
-    workers : list[dict]
+    dependencies : list of tuple
+        Пари (id_попередника, id_наступника).
+    workers : list of dict
         Кожен елемент: {'name': str, 'operations': [str, ...]}
-        operations — список НАЗВ операцій, які працівник може виконувати.
 
     Returns
     -------
-    dict | None
-        {'makespan': int,
-         'assignments': [{'operation_id': str, 'operation_name': str,
-                          'start': int, 'end': int,
-                          'workers': [str, ...]}, ...]}
-        або None якщо розклад неможливий.
+    dict or None
     """
-    import sys
-
-    print('[scheduler] build_schedule called', flush=True)
-    print(f'[scheduler]   operations={operations}', flush=True)
-    print(f'[scheduler]   dependencies={dependencies}', flush=True)
-    print(f'[scheduler]   workers={workers}', flush=True)
-
     if not operations:
         return {'makespan': 0, 'assignments': []}
 
     model = cp_model.CpModel()
 
-    # Максимальний горизонт — сума всіх тривалостей (верхня межа)
     horizon = sum(int(op['duration']) for op in operations)
-    print(f'[scheduler] horizon={horizon}', flush=True)
-
-    op_by_id = {op['id']: op for op in operations}
-    op_name_by_id = {op['id']: op['name'] for op in operations}
 
     # --- Змінні для кожної операції ---
     starts = {}
@@ -65,25 +44,23 @@ def build_schedule(operations: list[dict],
     for op in operations:
         oid = op['id']
         dur = int(op['duration'])
-        s = model.new_int_var(0, horizon, f'start_{oid}')
-        e = model.new_int_var(0, horizon, f'end_{oid}')
-        iv = model.new_interval_var(s, dur, e, f'interval_{oid}')
+        s = model.new_int_var(0, horizon, 'start_%s' % oid)
+        e = model.new_int_var(0, horizon, 'end_%s' % oid)
+        iv = model.new_interval_var(s, dur, e, 'interval_%s' % oid)
         starts[oid] = s
         ends[oid] = e
         intervals[oid] = iv
-
-    print('[scheduler] variables created', flush=True)
 
     # --- Обмеження залежностей ---
     for pred_id, succ_id in dependencies:
         if pred_id in ends and succ_id in starts:
             model.add(starts[succ_id] >= ends[pred_id])
 
-    print('[scheduler] dependencies added', flush=True)
-
     # --- Призначення працівників ---
-    assign_vars = {}  # (worker_idx, op_id) -> BoolVar
-    worker_intervals = {w_idx: [] for w_idx in range(len(workers))}
+    assign_vars = {}
+    worker_intervals = {}
+    for w_idx in range(len(workers)):
+        worker_intervals[w_idx] = []
 
     for op in operations:
         oid = op['id']
@@ -95,28 +72,22 @@ def build_schedule(operations: list[dict],
             if op_name in w.get('operations', []):
                 capable_workers.append(w_idx)
 
-        print(f'[scheduler] op={op_name}, needed={needed}, capable={len(capable_workers)}',
-              flush=True)
-
         if len(capable_workers) < needed:
-            print(f'[scheduler] NOT ENOUGH workers for {op_name}', flush=True)
             return None
 
         op_assign_vars = []
         for w_idx in capable_workers:
-            var = model.new_bool_var(f'assign_w{w_idx}_op{oid}')
+            var = model.new_bool_var('assign_w%d_op%s' % (w_idx, oid))
             assign_vars[(w_idx, oid)] = var
             op_assign_vars.append(var)
 
             opt_interval = model.new_optional_interval_var(
                 starts[oid], int(op['duration']), ends[oid],
-                var, f'worker_interval_w{w_idx}_op{oid}'
+                var, 'worker_interval_w%d_op%s' % (w_idx, oid)
             )
             worker_intervals[w_idx].append(opt_interval)
 
         model.add(sum(op_assign_vars) == needed)
-
-    print('[scheduler] worker assignments added', flush=True)
 
     # --- Кожен працівник не може виконувати дві операції одночасно ---
     for w_idx in range(len(workers)):
@@ -129,14 +100,10 @@ def build_schedule(operations: list[dict],
         model.add(makespan >= ends[op['id']])
     model.minimize(makespan)
 
-    print('[scheduler] model built, solving...', flush=True)
-
     # --- Розв'язати ---
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 30.0
     status = solver.solve(model)
-
-    print(f'[scheduler] solve status={status}', flush=True)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None
@@ -160,11 +127,9 @@ def build_schedule(operations: list[dict],
             'workers': assigned_workers,
         })
 
-    assignments.sort(key=lambda a: (a['start'], a['operation_name']))
+    assignments.sort(key=lambda x: (x['start'], x['operation_name']))
 
-    result = {
+    return {
         'makespan': solver.value(makespan),
         'assignments': assignments,
     }
-    print(f'[scheduler] result={result}', flush=True)
-    return result

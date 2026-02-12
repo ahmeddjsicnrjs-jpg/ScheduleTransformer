@@ -13,17 +13,14 @@ import traceback
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QDockWidget, QAction, QToolBar,
     QFileDialog, QMessageBox, QWidget, QVBoxLayout, QTextEdit,
-    QSplitter, QLabel,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
 
 from NodeGraphQt import NodeGraph, PropertiesBinWidget
 
 from nodes import OperationNode
 from workers_window import WorkersWindow
 from scheduler import build_schedule
-from gantt_widget import GanttWidget
 
 
 class MainWindow(QMainWindow):
@@ -32,6 +29,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('ScheduleTransformer — Редактор процесів')
         self.setMinimumSize(1100, 700)
+        self._last_schedule = None
 
         # --- Node Graph ---
         self._graph = NodeGraph()
@@ -47,17 +45,10 @@ class MainWindow(QMainWindow):
         props_dock.setWidget(self._properties_bin)
         self.addDockWidget(Qt.RightDockWidgetArea, props_dock)
 
-        # --- Gantt chart (dock, bottom) ---
-        self._gantt = GanttWidget()
-        gantt_dock = QDockWidget('Розклад')
-        gantt_dock.setWidget(self._gantt)
-        self.addDockWidget(Qt.BottomDockWidgetArea, gantt_dock)
-
-        # --- Log panel (dock) ---
+        # --- Log / results panel (dock, bottom) ---
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setMaximumHeight(150)
-        log_dock = QDockWidget('Журнал')
+        log_dock = QDockWidget('Журнал / Результати')
         log_dock.setWidget(self._log)
         self.addDockWidget(Qt.BottomDockWidgetArea, log_dock)
 
@@ -70,7 +61,7 @@ class MainWindow(QMainWindow):
         # --- Menu ---
         self._create_menu()
 
-        self._log_msg('Програму запущено. Додайте операції через меню або правий клік.')
+        self._log_msg('Програму запущено. Додайте операції через панель або Ctrl+N.')
 
     # ------------------------------------------------------------------
     # UI Setup
@@ -177,14 +168,12 @@ class MainWindow(QMainWindow):
             self._log_msg(f'Видалено {len(nodes)} вузлів')
 
     def _open_workers(self):
-        # Оновити список доступних операцій
         ops = self._get_operation_names()
         self._workers_window.set_available_operations(ops)
         self._workers_window.show()
         self._workers_window.raise_()
 
-    def _get_operation_names(self) -> list[str]:
-        """Зібрати імена всіх операцій з графа."""
+    def _get_operation_names(self):
         names = []
         for node in self._graph.all_nodes():
             if isinstance(node, OperationNode):
@@ -193,8 +182,7 @@ class MainWindow(QMainWindow):
                     names.append(name)
         return names
 
-    def _extract_graph_data(self) -> tuple[list[dict], list[tuple[str, str]]]:
-        """Зібрати операції та залежності з графа."""
+    def _extract_graph_data(self):
         operations = []
         dependencies = []
 
@@ -208,7 +196,6 @@ class MainWindow(QMainWindow):
                 'workers_needed': int(node.get_property('workers_needed') or 1),
             })
 
-        # Залежності: зв'язки від виходу до входу
         for node in self._graph.all_nodes():
             if not isinstance(node, OperationNode):
                 continue
@@ -229,51 +216,52 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, 'Помилка побудови розкладу', msg)
 
     def _do_build_schedule(self):
-        print('[main] _do_build_schedule start', flush=True)
         operations, dependencies = self._extract_graph_data()
-        print(f'[main] extracted: ops={len(operations)}, deps={len(dependencies)}', flush=True)
 
         if not operations:
             QMessageBox.warning(self, 'Увага', 'Граф порожній. Додайте операції.')
             return
 
         workers = self._workers_window.get_workers_data()
-        print(f'[main] workers={workers}', flush=True)
         if not workers:
             QMessageBox.warning(self, 'Увага',
                                 'Немає працівників. Відкрийте вікно працівників та додайте їх.')
             return
 
+        self._log_msg('=' * 50)
         self._log_msg('Побудова розкладу...')
         self._log_msg(f'  Операцій: {len(operations)}, '
                       f'Залежностей: {len(dependencies)}, '
                       f'Працівників: {len(workers)}')
 
-        print('[main] calling build_schedule...', flush=True)
         result = build_schedule(operations, dependencies, workers)
-        print(f'[main] build_schedule returned: {result is not None}', flush=True)
 
         if result is None:
             QMessageBox.critical(self, 'Помилка',
                                  'Неможливо побудувати розклад.\n\n'
                                  'Перевірте:\n'
-                                 '- Чи достатньо кваліфікованих працівників для кожної операції\n'
+                                 '- Чи достатньо кваліфікованих працівників '
+                                 'для кожної операції\n'
                                  '- Чи немає циклічних залежностей')
             self._log_msg('ПОМИЛКА: неможливо побудувати розклад')
             return
 
-        print('[main] setting gantt schedule...', flush=True)
-        self._gantt.set_schedule(result)
-        self._log_msg(f'Розклад побудовано! Загальний час: {result["makespan"]} хв')
+        # Виводимо результат текстово
+        self._log_msg(f'\nРозклад побудовано! Загальний час: {result["makespan"]} хв\n')
+
+        header = f'{"Операція":<25} {"Початок":>8} {"Кінець":>8} {"Трив.":>6}   Працівники'
+        self._log_msg(header)
+        self._log_msg('-' * len(header))
 
         for a in result['assignments']:
+            workers_str = ', '.join(a['workers']) if a['workers'] else '—'
             self._log_msg(
-                f'  {a["operation_name"]}: {a["start"]}-{a["end"]} хв, '
-                f'працівники: {", ".join(a["workers"])}'
+                f'{a["operation_name"]:<25} {a["start"]:>8} {a["end"]:>8} '
+                f'{a["duration"]:>6}   {workers_str}'
             )
 
+        self._log_msg('=' * 50)
         self._last_schedule = result
-        print('[main] _do_build_schedule done', flush=True)
 
     # ------------------------------------------------------------------
     # Save / Load
@@ -317,7 +305,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, 'Помилка завантаження', str(e))
 
     def _export_schedule(self):
-        if not hasattr(self, '_last_schedule') or self._last_schedule is None:
+        if self._last_schedule is None:
             QMessageBox.warning(self, 'Увага', 'Спочатку побудуйте розклад.')
             return
 
@@ -339,15 +327,17 @@ class MainWindow(QMainWindow):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _log_msg(self, msg: str):
+    def _log_msg(self, msg):
         self._log.append(msg)
 
 
 def _global_exception_handler(exc_type, exc_value, exc_tb):
-    """Перехоплює необроблені виключення і показує діалог замість крешу."""
     msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_tb))
     print(msg, file=sys.stderr)
-    QMessageBox.critical(None, 'Необроблена помилка', msg)
+    try:
+        QMessageBox.critical(None, 'Необроблена помилка', msg)
+    except Exception:
+        pass
 
 
 def main():
