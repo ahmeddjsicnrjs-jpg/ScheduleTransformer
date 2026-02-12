@@ -8,6 +8,7 @@ Google OR-Tools для оптимального планування розкл�
 
 import sys
 import json
+import traceback
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QDockWidget, QAction, QToolBar,
@@ -202,9 +203,9 @@ class MainWindow(QMainWindow):
                 continue
             operations.append({
                 'id': node.id,
-                'name': node.get_property('op_name'),
-                'duration': node.get_property('duration'),
-                'workers_needed': node.get_property('workers_needed'),
+                'name': node.get_property('op_name') or 'Без назви',
+                'duration': int(node.get_property('duration') or 1),
+                'workers_needed': int(node.get_property('workers_needed') or 1),
             })
 
         # Залежності: зв'язки від виходу до входу
@@ -220,6 +221,14 @@ class MainWindow(QMainWindow):
         return operations, dependencies
 
     def _build_schedule(self):
+        try:
+            self._do_build_schedule()
+        except Exception:
+            msg = traceback.format_exc()
+            self._log_msg(f'ПОМИЛКА:\n{msg}')
+            QMessageBox.critical(self, 'Помилка побудови розкладу', msg)
+
+    def _do_build_schedule(self):
         operations, dependencies = self._extract_graph_data()
 
         if not operations:
@@ -327,7 +336,16 @@ class MainWindow(QMainWindow):
         self._log.append(msg)
 
 
+def _global_exception_handler(exc_type, exc_value, exc_tb):
+    """Перехоплює необроблені виключення і показує діалог замість крешу."""
+    msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    print(msg, file=sys.stderr)
+    QMessageBox.critical(None, 'Необроблена помилка', msg)
+
+
 def main():
+    sys.excepthook = _global_exception_handler
+
     app = QApplication(sys.argv)
     app.setApplicationName('ScheduleTransformer')
     app.setStyle('Fusion')

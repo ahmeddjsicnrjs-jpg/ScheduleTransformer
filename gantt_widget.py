@@ -139,8 +139,9 @@ class GanttCanvas(QWidget):
                 painter.setFont(QFont('Arial', 8, QFont.Bold))
                 fm = QFontMetrics(painter.font())
                 label = a['operation_name']
-                if fm.horizontalAdvance(label) > bar_w - 6:
-                    label = fm.elidedText(label, Qt.ElideRight, int(bar_w - 6))
+                avail_w = max(int(bar_w - 6), 0)
+                if fm.horizontalAdvance(label) > avail_w:
+                    label = fm.elidedText(label, Qt.ElideRight, avail_w)
                 painter.drawText(rect.adjusted(3, 0, -3, 0),
                                  Qt.AlignVCenter | Qt.AlignLeft, label)
                 painter.setFont(QFont('Arial', 10))
