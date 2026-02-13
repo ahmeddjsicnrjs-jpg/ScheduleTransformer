@@ -4,9 +4,9 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
     QMessageBox, QLabel, QWidget,
     QLineEdit, QListWidget, QListWidgetItem,
-    QColorDialog,
+    QColorDialog, QCompleter,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QStringListModel
 from PyQt5.QtGui import QColor
 
 
@@ -20,8 +20,8 @@ _DEFAULT_COLORS = [
 
 class OperationListWidget(QWidget):
     """
-    Widget with two lists: available operations (with search filter)
-    and selected operations. Click to add/remove.
+    Widget with a QCompleter-based search field for adding operations
+    and a list of selected operations. Double-click selected to remove.
     """
 
     def __init__(self, available_operations, selected_operations=None, parent=None):
@@ -31,30 +31,31 @@ class OperationListWidget(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
-        layout.setSpacing(2)
+        layout.setSpacing(4)
 
-        # --- Search field ---
+        # --- Autocomplete search field ---
         self._search = QLineEdit()
-        self._search.setPlaceholderText('Пошук операції...')
-        self._search.textChanged.connect(self._filter_available)
+        self._search.setPlaceholderText('Почніть вводити назву операції...')
+        self._search.setStyleSheet('padding: 4px;')
+
+        self._completer_model = QStringListModel()
+        self._completer = QCompleter()
+        self._completer.setModel(self._completer_model)
+        self._completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self._completer.setFilterMode(Qt.MatchContains)
+        self._completer.setCompletionMode(QCompleter.PopupCompletion)
+        self._completer.popup().setStyleSheet(
+            'QListView { font-size: 12px; }'
+            'QListView::item { padding: 3px 6px; }'
+            'QListView::item:hover { background: #e8f5e9; }'
+        )
+        self._search.setCompleter(self._completer)
+
+        self._completer.activated.connect(self._on_completer_activated)
         layout.addWidget(self._search)
 
-        # --- Available operations list ---
-        lbl_avail = QLabel('Доступні:')
-        lbl_avail.setStyleSheet('font-size: 10px; color: #666; margin-top: 2px;')
-        layout.addWidget(lbl_avail)
-
-        self._available_list = QListWidget()
-        self._available_list.setStyleSheet(
-            'QListWidget { font-size: 11px; }'
-            'QListWidget::item { padding: 2px 4px; }'
-            'QListWidget::item:hover { background: #e8f5e9; }'
-        )
-        self._available_list.itemDoubleClicked.connect(self._on_available_clicked)
-        layout.addWidget(self._available_list, 1)
-
         # --- Selected operations list ---
-        lbl_sel = QLabel('Обрані:')
+        lbl_sel = QLabel('Обрані операції (подвійний клік — видалити):')
         lbl_sel.setStyleSheet('font-size: 10px; color: #666; margin-top: 2px;')
         layout.addWidget(lbl_sel)
 
@@ -67,59 +68,36 @@ class OperationListWidget(QWidget):
         self._selected_list.itemDoubleClicked.connect(self._on_selected_clicked)
         layout.addWidget(self._selected_list, 1)
 
-        self._rebuild_lists()
+        self._rebuild()
 
-    def _filter_available(self, text):
-        """Filter available operations list by search text."""
-        text = text.strip().lower()
-        for i in range(self._available_list.count()):
-            item = self._available_list.item(i)
-            if text:
-                item.setHidden(text not in item.text().lower())
-            else:
-                item.setHidden(False)
+    def _update_completer(self):
+        """Update completer model with operations not yet selected."""
+        not_selected = [op for op in self._available if op not in self._selected]
+        self._completer_model.setStringList(not_selected)
 
-    def _on_available_clicked(self, item):
-        op = item.text().lstrip('+ ')
+    def _on_completer_activated(self, text):
+        """User selected an operation from the autocomplete popup."""
+        op = text.strip()
         if op in self._available and op not in self._selected:
             self._selected.append(op)
-            self._rebuild_lists()
+            self._rebuild()
+        self._search.clear()
 
     def _on_selected_clicked(self, item):
         op = item.text().lstrip('\u00d7 ')
         if op in self._selected:
             self._selected.remove(op)
-            self._rebuild_lists()
+            self._rebuild()
 
-    def _rebuild_lists(self):
-        # Available (not yet selected)
-        self._available_list.clear()
-        not_selected = [op for op in self._available if op not in self._selected]
-        for op in not_selected:
-            item = QListWidgetItem(f'+ {op}')
-            item.setForeground(QColor(56, 142, 60))
-            self._available_list.addItem(item)
-
-        if not not_selected and not self._available:
-            item = QListWidgetItem('(немає операцій у графі)')
-            item.setForeground(QColor(160, 160, 160))
-            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
-            self._available_list.addItem(item)
-        elif not not_selected:
-            item = QListWidgetItem('(всі операції обрані)')
-            item.setForeground(QColor(160, 160, 160))
-            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
-            self._available_list.addItem(item)
-
-        # Selected
+    def _rebuild(self):
+        """Rebuild selected list and update completer."""
         self._selected_list.clear()
         for op in self._selected:
             item = QListWidgetItem(f'\u00d7 {op}')
             item.setForeground(QColor(198, 40, 40))
             self._selected_list.addItem(item)
 
-        # Re-apply search filter
-        self._filter_available(self._search.text())
+        self._update_completer()
 
     def get_selected_operations(self):
         return list(self._selected)
@@ -310,8 +288,8 @@ class WorkersWindow(QDialog):
             )
             self._table.setCellWidget(row, 2, ops_widget)
 
-            total_ops = len(self._available_operations) + len(worker_ops)
-            self._table.setRowHeight(row, max(180, 22 * total_ops + 80))
+            selected_count = len(worker_ops)
+            self._table.setRowHeight(row, max(120, 22 * selected_count + 70))
 
     # ------------------------------------------------------------------
     # File I/O

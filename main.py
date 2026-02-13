@@ -178,7 +178,7 @@ class MainWindow(QMainWindow):
     def _open_workers(self):
         ops = self._get_operation_names()
         self._workers_window.set_available_operations(ops)
-        self._workers_window.show()
+        self._workers_window.showMaximized()
         self._workers_window.raise_()
 
     def _get_operation_names(self):
@@ -406,7 +406,7 @@ def main():
     app.setStyle('Fusion')
 
     window = MainWindow()
-    window.show()
+    window.showMaximized()
 
     sys.exit(app.exec_())
 
