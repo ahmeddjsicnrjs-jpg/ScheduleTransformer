@@ -224,11 +224,12 @@ class GanttWindow(QMainWindow):
         self._gantt.set_schedule(schedule)
 
     def show_fullscreen_chart(self):
-        """Показати вікно на весь екран."""
-        self.showFullScreen()
+        """Показати вікно розгорнутим на весь екран."""
+        self.showMaximized()
+        self.raise_()
 
     def _toggle_fullscreen(self):
-        if self.isFullScreen():
+        if self.isMaximized():
             self.showNormal()
         else:
-            self.showFullScreen()
+            self.showMaximized()
