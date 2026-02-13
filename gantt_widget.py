@@ -37,7 +37,14 @@ class GanttCanvas(QWidget):
         super().__init__(parent)
         self._schedule = None
         self._makespan = 0
+        self._worker_colors = {}  # {worker_name: QColor}
         self.setMinimumHeight(200)
+
+    def set_worker_colors(self, color_map: dict):
+        """Set worker color mapping {name: '#rrggbb'}."""
+        self._worker_colors = {
+            name: QColor(color) for name, color in color_map.items()
+        }
 
     def set_schedule(self, schedule: dict):
         self._schedule = schedule
@@ -81,11 +88,13 @@ class GanttCanvas(QWidget):
             painter.end()
             return
 
-        # Кольори операцій
+        # Кольори операцій (fallback якщо немає кольорів працівників)
         op_names = list(dict.fromkeys(a['operation_name'] for a in assignments))
         op_color_map = {}
         for i, name in enumerate(op_names):
             op_color_map[name] = _COLORS[i % len(_COLORS)]
+
+        use_worker_colors = bool(self._worker_colors)
 
         width = self.width()
         chart_width = width - self.LEFT_MARGIN - self.RIGHT_MARGIN
@@ -135,7 +144,10 @@ class GanttCanvas(QWidget):
                 x_end = self.LEFT_MARGIN + a['end'] * px_per_unit
                 bar_w = max(x_end - x_start, 2)
 
-                color = op_color_map.get(a['operation_name'], QColor(100, 100, 100))
+                if use_worker_colors and worker_name in self._worker_colors:
+                    color = self._worker_colors[worker_name]
+                else:
+                    color = op_color_map.get(a['operation_name'], QColor(100, 100, 100))
                 painter.setBrush(color)
                 painter.setPen(QPen(color.darker(130), 1))
 
@@ -174,6 +186,10 @@ class GanttWidget(QWidget):
         self._canvas = GanttCanvas()
         self._scroll.setWidget(self._canvas)
         layout.addWidget(self._scroll)
+
+    def set_worker_colors(self, color_map: dict):
+        """Set worker color mapping {name: '#rrggbb'}."""
+        self._canvas.set_worker_colors(color_map)
 
     def set_schedule(self, schedule: dict):
         ms = schedule.get('makespan', 0)

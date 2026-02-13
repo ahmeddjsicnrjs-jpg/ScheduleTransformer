@@ -178,7 +178,7 @@ class MainWindow(QMainWindow):
     def _open_workers(self):
         ops = self._get_operation_names()
         self._workers_window.set_available_operations(ops)
-        self._workers_window.show()
+        self._workers_window.showMaximized()
         self._workers_window.raise_()
 
     def _get_operation_names(self):
@@ -301,6 +301,14 @@ class MainWindow(QMainWindow):
             )
 
         self._log_msg('=' * 50)
+
+        # Передаємо кольори працівників у діаграму Ганта
+        worker_color_map = {}
+        for w in workers:
+            if 'color' in w:
+                worker_color_map[w['name']] = w['color']
+        self._gantt.set_worker_colors(worker_color_map)
+
         self._gantt.set_schedule(result)
         self._last_schedule = result
 
@@ -398,7 +406,7 @@ def main():
     app.setStyle('Fusion')
 
     window = MainWindow()
-    window.show()
+    window.showMaximized()
 
     sys.exit(app.exec_())
 

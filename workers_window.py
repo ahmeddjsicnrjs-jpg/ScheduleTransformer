@@ -2,10 +2,148 @@ import json
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
-    QMessageBox, QLabel, QCheckBox, QWidget, QScrollArea,
-    QGroupBox, QLineEdit,
+    QMessageBox, QLabel, QWidget,
+    QLineEdit, QListWidget, QListWidgetItem,
+    QColorDialog, QCompleter,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QStringListModel
+from PyQt5.QtGui import QColor
+
+
+# Default palette for new workers (cycles through)
+_DEFAULT_COLORS = [
+    '#4CAF50', '#2196F3', '#FF9800', '#9C27B0',
+    '#F44336', '#00BCD4', '#FFEB3B', '#795548',
+    '#607D8B', '#E91E63', '#3F51B5', '#8BC34A',
+]
+
+
+class OperationListWidget(QWidget):
+    """
+    Widget with a QCompleter-based search field for adding operations
+    and a list of selected operations. Double-click selected to remove.
+    """
+
+    def __init__(self, available_operations, selected_operations=None, parent=None):
+        super().__init__(parent)
+        self._available = list(available_operations)
+        self._selected = list(selected_operations or [])
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(4)
+
+        # --- Autocomplete search field ---
+        self._search = QLineEdit()
+        self._search.setPlaceholderText('Почніть вводити назву операції...')
+        self._search.setStyleSheet('padding: 4px;')
+        self._search.returnPressed.connect(self._on_return_pressed)
+
+        self._completer_model = QStringListModel()
+        self._completer = QCompleter()
+        self._completer.setModel(self._completer_model)
+        self._completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self._completer.setFilterMode(Qt.MatchContains)
+        self._completer.setCompletionMode(QCompleter.PopupCompletion)
+        self._completer.popup().setStyleSheet(
+            'QListView { font-size: 12px; }'
+            'QListView::item { padding: 3px 6px; }'
+            'QListView::item:hover { background: #e8f5e9; }'
+        )
+        self._search.setCompleter(self._completer)
+
+        self._completer.activated.connect(self._on_completer_activated)
+        layout.addWidget(self._search)
+
+        # --- Selected operations list ---
+        lbl_sel = QLabel('Обрані операції (подвійний клік — видалити):')
+        lbl_sel.setStyleSheet('font-size: 10px; color: #666; margin-top: 2px;')
+        layout.addWidget(lbl_sel)
+
+        self._selected_list = QListWidget()
+        self._selected_list.setStyleSheet(
+            'QListWidget { font-size: 11px; }'
+            'QListWidget::item { padding: 2px 4px; }'
+            'QListWidget::item:hover { background: #ffebee; }'
+        )
+        self._selected_list.itemDoubleClicked.connect(self._on_selected_clicked)
+        layout.addWidget(self._selected_list, 1)
+
+        self._rebuild()
+
+    def _on_return_pressed(self):
+        """Handle Enter key — add current completion or just consume the event."""
+        text = self._search.text().strip()
+        if text in self._available and text not in self._selected:
+            self._selected.append(text)
+            self._rebuild()
+        self._search.clear()
+
+    def _update_completer(self):
+        """Update completer model with operations not yet selected."""
+        not_selected = [op for op in self._available if op not in self._selected]
+        self._completer_model.setStringList(not_selected)
+
+    def _on_completer_activated(self, text):
+        """User selected an operation from the autocomplete popup."""
+        op = text.strip()
+        if op in self._available and op not in self._selected:
+            self._selected.append(op)
+            self._rebuild()
+        self._search.clear()
+
+    def _on_selected_clicked(self, item):
+        op = item.text().lstrip('\u00d7 ')
+        if op in self._selected:
+            self._selected.remove(op)
+            self._rebuild()
+
+    def _rebuild(self):
+        """Rebuild selected list and update completer."""
+        self._selected_list.clear()
+        for op in self._selected:
+            item = QListWidgetItem(f'\u00d7 {op}')
+            item.setForeground(QColor(198, 40, 40))
+            self._selected_list.addItem(item)
+
+        self._update_completer()
+
+    def get_selected_operations(self):
+        return list(self._selected)
+
+
+class ColorButton(QPushButton):
+    """A button that shows its color and opens a color picker on click."""
+
+    def __init__(self, color='#4CAF50', parent=None):
+        super().__init__(parent)
+        self._color = QColor(color)
+        self.setFixedSize(36, 36)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip('Обрати колір')
+        self.clicked.connect(self._pick_color)
+        self._update_style()
+
+    def _pick_color(self):
+        color = QColorDialog.getColor(self._color, self, 'Обрати колір працівника')
+        if color.isValid():
+            self._color = color
+            self._update_style()
+
+    def _update_style(self):
+        self.setStyleSheet(
+            f'QPushButton {{ background-color: {self._color.name()}; '
+            f'border: 2px solid {self._color.darker(130).name()}; '
+            f'border-radius: 4px; }}'
+            f'QPushButton:hover {{ border: 2px solid #333; }}'
+        )
+
+    def get_color(self):
+        return self._color.name()
+
+    def set_color(self, color_str):
+        self._color = QColor(color_str)
+        self._update_style()
 
 
 class WorkersWindow(QDialog):
@@ -17,9 +155,9 @@ class WorkersWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle('Управління працівниками')
-        self.setMinimumSize(700, 500)
+        self.setMinimumSize(750, 500)
 
-        self._workers = []  # [{'name': str, 'operations': [str, ...]}]
+        self._workers = []  # [{'name': str, 'operations': [str, ...], 'color': str}]
         self._available_operations = []
 
         self._init_ui()
@@ -32,10 +170,12 @@ class WorkersWindow(QDialog):
         lbl.setStyleSheet('font-weight: bold; font-size: 14px;')
         layout.addWidget(lbl)
 
-        self._table = QTableWidget(0, 2)
-        self._table.setHorizontalHeaderLabels(["Ім'я працівника", 'Доступні операції'])
+        self._table = QTableWidget(0, 3)
+        self._table.setHorizontalHeaderLabels(["Ім'я працівника", 'Колір', 'Доступні операції'])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        self._table.horizontalHeader().resizeSection(1, 50)
+        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         layout.addWidget(self._table)
 
@@ -89,8 +229,13 @@ class WorkersWindow(QDialog):
 
     def _add_worker(self):
         self._sync_from_table()
-        self._workers.append({'name': f'Працівник {len(self._workers) + 1}',
-                              'operations': list(self._available_operations)})
+        idx = len(self._workers)
+        color = _DEFAULT_COLORS[idx % len(_DEFAULT_COLORS)]
+        self._workers.append({
+            'name': f'Працівник {idx + 1}',
+            'operations': [],
+            'color': color,
+        })
         self._refresh_table()
 
     def _remove_worker(self):
@@ -111,17 +256,21 @@ class WorkersWindow(QDialog):
             name_item = self._table.item(row, 0)
             name = name_item.text() if name_item else f'Працівник {row + 1}'
 
-            ops_widget = self._table.cellWidget(row, 1)
+            # Color
+            color_widget = self._table.cellWidget(row, 1)
+            color = '#4CAF50'
+            if color_widget:
+                btn = color_widget.findChild(ColorButton)
+                if btn:
+                    color = btn.get_color()
+
+            # Operations
+            ops_widget = self._table.cellWidget(row, 2)
             selected_ops = []
-            if ops_widget:
-                scroll = ops_widget.findChild(QScrollArea)
-                if scroll:
-                    container = scroll.widget()
-                    if container:
-                        for cb in container.findChildren(QCheckBox):
-                            if cb.isChecked():
-                                selected_ops.append(cb.text())
-            workers.append({'name': name, 'operations': selected_ops})
+            if isinstance(ops_widget, OperationListWidget):
+                selected_ops = ops_widget.get_selected_operations()
+
+            workers.append({'name': name, 'operations': selected_ops, 'color': color})
         self._workers = workers
 
     def _refresh_table(self):
@@ -131,34 +280,25 @@ class WorkersWindow(QDialog):
             name_item = QTableWidgetItem(worker.get('name', ''))
             self._table.setItem(row, 0, name_item)
 
-            # Чекбокси операцій
-            container_widget = QWidget()
-            container_layout = QVBoxLayout(container_widget)
-            container_layout.setContentsMargins(4, 2, 4, 2)
+            # Колір
+            color_container = QWidget()
+            color_layout = QHBoxLayout(color_container)
+            color_layout.setContentsMargins(4, 4, 4, 4)
+            color_layout.setAlignment(Qt.AlignCenter)
+            color_str = worker.get('color', _DEFAULT_COLORS[row % len(_DEFAULT_COLORS)])
+            color_btn = ColorButton(color_str)
+            color_layout.addWidget(color_btn)
+            self._table.setCellWidget(row, 1, color_container)
 
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            inner = QWidget()
-            inner_layout = QVBoxLayout(inner)
-            inner_layout.setContentsMargins(2, 2, 2, 2)
-
+            # Операції — випадаючий список з пошуком
             worker_ops = worker.get('operations', [])
-            for op in self._available_operations:
-                cb = QCheckBox(op)
-                cb.setChecked(op in worker_ops)
-                inner_layout.addWidget(cb)
+            ops_widget = OperationListWidget(
+                self._available_operations, worker_ops
+            )
+            self._table.setCellWidget(row, 2, ops_widget)
 
-            if not self._available_operations:
-                lbl = QLabel('(немає операцій у графі)')
-                lbl.setStyleSheet('color: gray;')
-                inner_layout.addWidget(lbl)
-
-            inner_layout.addStretch()
-            scroll.setWidget(inner)
-            container_layout.addWidget(scroll)
-
-            self._table.setCellWidget(row, 1, container_widget)
-            self._table.setRowHeight(row, max(120, 30 * len(self._available_operations)))
+            selected_count = len(worker_ops)
+            self._table.setRowHeight(row, max(120, 22 * selected_count + 70))
 
     # ------------------------------------------------------------------
     # File I/O
