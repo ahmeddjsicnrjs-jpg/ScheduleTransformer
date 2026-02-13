@@ -37,6 +37,7 @@ class OperationListWidget(QWidget):
         self._search = QLineEdit()
         self._search.setPlaceholderText('Почніть вводити назву операції...')
         self._search.setStyleSheet('padding: 4px;')
+        self._search.returnPressed.connect(self._on_return_pressed)
 
         self._completer_model = QStringListModel()
         self._completer = QCompleter()
@@ -69,6 +70,14 @@ class OperationListWidget(QWidget):
         layout.addWidget(self._selected_list, 1)
 
         self._rebuild()
+
+    def _on_return_pressed(self):
+        """Handle Enter key — add current completion or just consume the event."""
+        text = self._search.text().strip()
+        if text in self._available and text not in self._selected:
+            self._selected.append(text)
+            self._rebuild()
+        self._search.clear()
 
     def _update_completer(self):
         """Update completer model with operations not yet selected."""
@@ -224,7 +233,7 @@ class WorkersWindow(QDialog):
         color = _DEFAULT_COLORS[idx % len(_DEFAULT_COLORS)]
         self._workers.append({
             'name': f'Працівник {idx + 1}',
-            'operations': list(self._available_operations),
+            'operations': [],
             'color': color,
         })
         self._refresh_table()
