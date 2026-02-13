@@ -2,8 +2,10 @@
 Віджет діаграми Ганта для відображення результатів планування.
 """
 
-from PyQt5.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
-from PyQt5.QtGui import QPainter, QColor, QFont, QPen, QFontMetrics
+from PyQt5.QtWidgets import (
+    QWidget, QScrollArea, QVBoxLayout, QLabel, QMainWindow, QShortcut,
+)
+from PyQt5.QtGui import QPainter, QColor, QFont, QPen, QFontMetrics, QKeySequence
 from PyQt5.QtCore import Qt, QRectF
 
 
@@ -199,3 +201,34 @@ class GanttWidget(QWidget):
             f'Діаграма Ганта  —  Загальний час: {ms_h} год ({ms_d} дн)  |  '
             f'Зміна: 8:00–17:00')
         self._canvas.set_schedule(schedule)
+
+
+class GanttWindow(QMainWindow):
+    """Окреме вікно для повноекранного відображення діаграми Ганта."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Діаграма Ганта — ScheduleTransformer')
+        self._gantt = GanttWidget()
+        self.setCentralWidget(self._gantt)
+
+        # Esc — закрити вікно
+        QShortcut(QKeySequence(Qt.Key_Escape), self, self.close)
+        # F11 — перемикання повноекранного режиму
+        QShortcut(QKeySequence(Qt.Key_F11), self, self._toggle_fullscreen)
+
+    def set_worker_colors(self, color_map: dict):
+        self._gantt.set_worker_colors(color_map)
+
+    def set_schedule(self, schedule: dict):
+        self._gantt.set_schedule(schedule)
+
+    def show_fullscreen_chart(self):
+        """Показати вікно на весь екран."""
+        self.showFullScreen()
+
+    def _toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()

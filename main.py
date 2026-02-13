@@ -21,7 +21,7 @@ from NodeGraphQt import NodeGraph, PropertiesBinWidget
 from nodes import OperationNode
 from workers_window import WorkersWindow
 from scheduler import build_schedule
-from gantt_widget import GanttWidget
+from gantt_widget import GanttWidget, GanttWindow
 
 
 class MainWindow(QMainWindow):
@@ -59,6 +59,9 @@ class MainWindow(QMainWindow):
         log_dock = QDockWidget('Журнал')
         log_dock.setWidget(self._log)
         self.addDockWidget(Qt.BottomDockWidgetArea, log_dock)
+
+        # --- Fullscreen Gantt window ---
+        self._gantt_window = GanttWindow(self)
 
         # --- Workers window ---
         self._workers_window = WorkersWindow(self)
@@ -311,6 +314,11 @@ class MainWindow(QMainWindow):
 
         self._gantt.set_schedule(result)
         self._last_schedule = result
+
+        # Відкриваємо діаграму Ганта в окремому повноекранному вікні
+        self._gantt_window.set_worker_colors(worker_color_map)
+        self._gantt_window.set_schedule(result)
+        self._gantt_window.show_fullscreen_chart()
 
     # ------------------------------------------------------------------
     # Save / Load
